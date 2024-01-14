@@ -1,25 +1,130 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "../../App.css";
-import { Button, Input } from "@mui/material";
+import { Button, IconButton, Input } from "@mui/material";
 import Modal from "@mui/material/Modal";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import DetailsModal from "../modals/detailsModal/DetailsModal";
+import EditModal from "../modals/detailsModal/EditModal";
 import AddModal from "../modals/addModal/AddModal";
+import "./UserList.css";
+import toast, { Toaster } from "react-hot-toast";
 
-const style = {
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: 400,
-  bgcolor: "background.paper",
-  border: "2px solid #000",
-  boxShadow: 24,
-  p: 4,
-  color: "black",
-  borderRadius: "12px",
+// Table
+import { styled, useTheme } from "@mui/material/styles";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell, { tableCellClasses } from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+
+// Pagination
+import TableFooter from "@mui/material/TableFooter";
+import TablePagination from "@mui/material/TablePagination";
+import PropTypes from "prop-types";
+import FirstPageIcon from "@mui/icons-material/FirstPage";
+import KeyboardArrowLeft from "@mui/icons-material/KeyboardArrowLeft";
+import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
+import LastPageIcon from "@mui/icons-material/LastPage";
+
+function TablePaginationActions(props) {
+  const theme = useTheme();
+  const { count, page, rowsPerPage, onPageChange } = props;
+
+  const handleFirstPageButtonClick = (event) => {
+    onPageChange(event, 0);
+  };
+
+  const handleBackButtonClick = (event) => {
+    onPageChange(event, page - 1);
+  };
+
+  const handleNextButtonClick = (event) => {
+    onPageChange(event, page + 1);
+  };
+
+  const handleLastPageButtonClick = (event) => {
+    onPageChange(event, Math.max(0, Math.ceil(count / rowsPerPage) - 1));
+  };
+
+  return (
+    <Box sx={{ flexShrink: 0, ml: 2.5 }}>
+      <IconButton
+        onClick={handleFirstPageButtonClick}
+        disabled={page === 0}
+        aria-label="first page"
+      >
+        {theme.direction === "rtl" ? <LastPageIcon /> : <FirstPageIcon />}
+      </IconButton>
+      <IconButton
+        onClick={handleBackButtonClick}
+        disabled={page === 0}
+        aria-label="previous page"
+      >
+        {theme.direction === "rtl" ? (
+          <KeyboardArrowRight />
+        ) : (
+          <KeyboardArrowLeft />
+        )}
+      </IconButton>
+      <IconButton
+        onClick={handleNextButtonClick}
+        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
+        aria-label="next page"
+      >
+        {theme.direction === "rtl" ? (
+          <KeyboardArrowLeft />
+        ) : (
+          <KeyboardArrowRight />
+        )}
+      </IconButton>
+      <IconButton
+        onClick={handleLastPageButtonClick}
+        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
+        aria-label="last page"
+      >
+        {theme.direction === "rtl" ? <FirstPageIcon /> : <LastPageIcon />}
+      </IconButton>
+    </Box>
+  );
+}
+
+TablePaginationActions.propTypes = {
+  count: PropTypes.number.isRequired,
+  onPageChange: PropTypes.func.isRequired,
+  page: PropTypes.number.isRequired,
+  rowsPerPage: PropTypes.number.isRequired,
 };
+
+// Table Styling
+const StyledTableCell = styled(TableCell)(({ theme }) => ({
+  "&.MuiTableCell-head": {
+    backgroundColor: "#3cd684",
+    color: "black",
+    fontSize: 22,
+    fontWeight: "bold",
+    fontFamily: "Russo One",
+  },
+  "&.MuiTableCell-body": {
+    fontSize: 14,
+    fontFamily: "Unbounded",
+    textTransform: "capitalize",
+  },
+}));
+
+const StyledTableRow = styled(TableRow)(({ theme }) => ({
+  "&:nth-of-type(odd)": {
+    backgroundColor: "white",
+    color: "white",
+  },
+  // hide last border
+  "&:last-child td, &:last-child th": {
+    border: 0,
+  },
+}));
 
 function UserList() {
   const [open, setOpen] = useState(false);
@@ -29,39 +134,7 @@ function UserList() {
   const handleClose = () => setOpen(false);
   const handleCloseAddModal = () => setOpenAddModal(false);
 
-  const [user, setUser] = useState([
-    {
-      firstName: "James",
-      lastName: "Matman",
-      birthDate: "1981-07-17",
-      address: "102 Long Lane, London, United Kingdom",
-      maritalStatus: "married",
-    },
-
-    {
-      firstName: "Jane",
-      lastName: "Citizen",
-      birthDate: "1980-12-25",
-      address: "102 Long Lane, London, United Kingdom",
-      maritalStatus: "married",
-    },
-
-    {
-      firstName: "Fred",
-      lastName: "Bloggs",
-      birthDate: "1980-12-25",
-      address: "102 Long Lane, London, United Kingdom",
-      maritalStatus: "married",
-    },
-
-    {
-      firstName: "Frank",
-      lastName: "Sinatra",
-      birthDate: "1915-12-12",
-      address: "102 Long Lane, London, United Kingdom",
-      maritalStatus: "married",
-    },
-  ]);
+  const [user, setUser] = useState([]);
 
   const handleOpen = (userData) => {
     setSelectedUser(userData);
@@ -72,45 +145,158 @@ function UserList() {
     setOpenAddModal(true);
   };
 
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/users/delete/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (response.ok) {
+        toast.success("User deleted successfully");
+        const newUser = user.filter((userData) => userData.id !== id);
+        setUser(newUser);
+      } else {
+        toast.error("Failed to delete user");
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("An error occurred while deleting user");
+    }
+  };
+
+  useEffect(() => {
+    const getUser = async () => {
+      const res = await fetch("http://localhost:5000/api/users");
+      const data = await res.json();
+      setUser(data);
+    };
+    getUser();
+  }, []);
+
+  const [page, setPage] = React.useState(0);
+  const [rowsPerPage, setRowsPerPage] = React.useState(5);
+
+  // Avoid a layout jump when reaching the last page with empty rows.
+  const emptyRows =
+    page > 0 ? Math.max(0, (1 + page) * rowsPerPage - user.length) : 0;
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
   return (
     <>
-      <div>
-        <DetailsModal
+      <div className="container">
+        <Toaster position="top-right" reverseOrder={false} />
+        <EditModal
           open={open}
           handleClose={handleClose}
           selectedUser={selectedUser}
+          setSelectedUser={setSelectedUser}
         />
         <AddModal
           open={openAddModal}
           handleCloseAddModal={handleCloseAddModal}
         />
-        <h1>Table</h1>
-
-        <table>
-          <thead>
-            <tr>
-              <th>First Name</th>
-              <th>Last Name</th>
-              <th>D.O.B</th>
-              <th>Address</th>
-              <th>Marital Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {user.map((userData, index) => (
-              <tr key={index} onClick={() => handleOpen(userData)}>
-                <td>{userData.firstName}</td>
-                <td>{userData.lastName}</td>
-                <td>{userData.birthDate}</td>
-                <td>{userData.address}</td>
-                <td>{userData.maritalStatus}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h1>MERN CRUD Table 🔥</h1>
+        <TableContainer component={Paper}>
+          <Table sx={{ minWidth: 700 }} aria-label="customized table">
+            <TableHead>
+              <TableRow>
+                <StyledTableCell>First Name</StyledTableCell>
+                <StyledTableCell align="left">Last Name</StyledTableCell>
+                <StyledTableCell align="left">Birth Date</StyledTableCell>
+                <StyledTableCell align="left">Maritalstatus</StyledTableCell>
+                <StyledTableCell align="left">Address</StyledTableCell>
+                <StyledTableCell align="left">Actions</StyledTableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(rowsPerPage > 0
+                ? user.slice(
+                    page * rowsPerPage,
+                    page * rowsPerPage + rowsPerPage
+                  )
+                : user
+              ).map((userData, index) => (
+                <StyledTableRow key={index}>
+                  <StyledTableCell component="th" scope="row">
+                    {userData.firstname}
+                  </StyledTableCell>
+                  <StyledTableCell align="left">
+                    {userData.lastname}
+                  </StyledTableCell>
+                  <StyledTableCell align="left">
+                    {userData.birthdate}
+                  </StyledTableCell>
+                  <StyledTableCell align="left">
+                    {userData.maritalstatus}
+                  </StyledTableCell>
+                  <StyledTableCell align="left">
+                    {userData.address}
+                  </StyledTableCell>
+                  <StyledTableCell align="left">
+                    <IconButton onClick={() => handleOpen(userData)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(userData.id)}>
+                      <DeleteForeverIcon />
+                    </IconButton>
+                  </StyledTableCell>
+                </StyledTableRow>
+              ))}
+              {emptyRows > 0 && (
+                <StyledTableRow style={{ height: 53 * emptyRows }}>
+                  <StyledTableCell colSpan={6} />
+                </StyledTableRow>
+              )}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TablePagination
+                  rowsPerPageOptions={[5, 10, 25, { label: "All", value: -1 }]}
+                  colSpan={3}
+                  count={user.length}
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  SelectProps={{
+                    inputProps: {
+                      "aria-label": "rows per page",
+                    },
+                    native: true,
+                  }}
+                  onPageChange={handleChangePage}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                  ActionsComponent={TablePaginationActions}
+                />
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </TableContainer>
       </div>
-      <Button onClick={handleOpenAddModal}>Open modal</Button>
+      <div className="btn_wrapper">
+        <Button
+          style={{
+            backgroundColor: "black",
+            color: "white",
+            padding: "10px",
+            borderRadius: "5px",
+            cursor: "pointer",
+            fontFamily: "Russo One",
+          }}
+          onClick={handleOpenAddModal}
+        >
+          Add User
+        </Button>
+      </div>
     </>
   );
 }
